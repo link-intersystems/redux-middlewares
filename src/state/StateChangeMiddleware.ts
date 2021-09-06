@@ -1,4 +1,4 @@
-import { AnyAction, Middleware } from "redux";
+import { AnyAction, Dispatch, Middleware, MiddlewareAPI } from "redux";
 
 export type StateSelector<S, T> = (state: S) => T;
 
@@ -13,22 +13,25 @@ interface OnStateChange<S, T> {
   thenDispatch(actionRef: ActionRef<S, T>): void;
 }
 
+type Dependency = StateDependency<any, any>;
+type RegisterDependency = (dependency: Dependency) => void;
+
 class StateDependency<S, T> implements OnStateChange<S, T> {
   private stateSelector: StateSelector<S, T>;
   private actionRef: ActionRef<S, T> = () => undefined;
-  private dependencyRegistrar: DependencyRegistrar;
+  private registerDependency: RegisterDependency;
 
   constructor(
     stateSelector: StateSelector<S, T>,
-    dependencyRegistrar: DependencyRegistrar
+    registerDependency: RegisterDependency
   ) {
     this.stateSelector = stateSelector;
-    this.dependencyRegistrar = dependencyRegistrar;
+    this.registerDependency = registerDependency;
   }
 
   thenDispatch(actionRef: ActionRef<S, T>) {
     this.actionRef = actionRef;
-    this.dependencyRegistrar(this);
+    this.registerDependency(this);
   }
 
   selectState(state: any) {
@@ -41,13 +44,6 @@ class StateDependency<S, T> implements OnStateChange<S, T> {
     }
     return this.actionRef;
   }
-}
-type Dependency = StateDependency<any, any>;
-type DependencyRegistrar = (dependency: Dependency) => void;
-
-export interface StateChangeComponent {
-  stateListener: StateListener;
-  stateChangeMiddleware: Middleware<{}, any>;
 }
 
 export interface StateListener {
@@ -99,12 +95,6 @@ class StateChangeTrigger {
   }
 }
 
-export type StateChangeMiddleware = Middleware<
-  {}, // Most middleware do not modify the dispatch return value
-  any
-> &
-  StateListener;
-
 export class StateChangeMiddlewareError extends Error {
   constructor(m: string) {
     super(m);
@@ -114,57 +104,103 @@ export class StateChangeMiddlewareError extends Error {
   }
 }
 
-const undefinedElements = <E>(elem: E | null | undefined): elem is E => {
-  return elem != null;
-};
+export type StateChangeMiddleware = Middleware<
+  {}, // Most middleware do not modify the dispatch return value
+  any
+> &
+  StateListener;
 
-const defaultOptions = {
-  maxCallStackDepth: 20,
-};
-
-export const createStateChangeMiddleware = (
-  options = defaultOptions
-): StateChangeMiddleware => {
-  const listenerRegistry = new StateListenerRegistry();
-
-  const effectiveOptions = { ...defaultOptions, ...options };
-
-  const maxCallStackDepth = effectiveOptions.maxCallStackDepth;
+function callStackTemplate(
+  maxCallStackDepth: number,
+  fn: (
+    api: MiddlewareAPI<Dispatch<AnyAction>, any>,
+    next: Dispatch<AnyAction>,
+    action: AnyAction
+  ) => any,
+  onCallStackLimitExceeded: (
+    maxCallStackDepth: number,
+    callStackDepth: number
+  ) => void
+): StateChangeMiddleware {
   let callStackDepth = 0;
 
-  const stateChangeMiddleware: StateChangeMiddleware =
-    (store) => (next) => (action) => {
+  const template =
+    (api: MiddlewareAPI<Dispatch<AnyAction>, any>) =>
+    (next: Dispatch<AnyAction>) =>
+    (action: AnyAction) => {
       callStackDepth++;
       try {
         if (callStackDepth > maxCallStackDepth) {
-          throw new StateChangeMiddlewareError(
-            `Max call stack depth ${maxCallStackDepth} exceeded: ${callStackDepth}`
-          );
+          onCallStackLimitExceeded(maxCallStackDepth, callStackDepth);
+        } else {
+          return fn(api, next, action);
         }
-
-        const stateBefore = store.getState();
-        const changeTriggers = listenerRegistry.getTriggers(stateBefore);
-
-        const result = next(action);
-
-        const stateAfter = store.getState();
-
-        const dispatchActions = changeTriggers
-          .map((sct) => sct.getAction(stateAfter))
-          .filter(undefinedElements);
-
-        dispatchActions.forEach((a) => store.dispatch(a));
-
-        return result;
       } finally {
         callStackDepth--;
       }
     };
 
-  stateChangeMiddleware.whenStateChanges =
+  return template as StateChangeMiddleware;
+}
+
+const undefinedElements = <E>(elem: E | null | undefined): elem is E => {
+  return elem != null;
+};
+
+const stateChangeMiddleware = (listenerRegistry: StateListenerRegistry) => {
+  return (
+    store: MiddlewareAPI<Dispatch<AnyAction>, any>,
+    next: Dispatch<AnyAction>,
+    action: AnyAction
+  ) => {
+    const stateBefore = store.getState();
+    const changeTriggers = listenerRegistry.getTriggers(stateBefore);
+
+    const result = next(action);
+
+    const stateAfter = store.getState();
+
+    const dispatchActions = changeTriggers
+      .map((sct) => sct.getAction(stateAfter))
+      .filter(undefinedElements);
+
+    dispatchActions.forEach(store.dispatch);
+
+    return result;
+  };
+};
+
+const onCallStackLimitExceeded = (
+  maxCallStackDepth: number,
+  callStackDepth: number
+) => {
+  throw new StateChangeMiddlewareError(
+    `Max call stack depth ${maxCallStackDepth} exceeded: ${callStackDepth}`
+  );
+};
+
+const defaultOptions = {
+  maxCallStackDepth: 20,
+  onCallStackLimitExceeded,
+};
+
+export const createStateChangeMiddleware = (
+  options = defaultOptions
+): StateChangeMiddleware => {
+  const effectiveOptions = { ...defaultOptions, ...options };
+
+  const listenerRegistry = new StateListenerRegistry();
+
+  const middleware = callStackTemplate(
+    effectiveOptions.maxCallStackDepth,
+    stateChangeMiddleware(listenerRegistry),
+    effectiveOptions.onCallStackLimitExceeded
+  );
+
+  middleware.whenStateChanges =
     listenerRegistry.whenStateChanges.bind(listenerRegistry);
 
-  return stateChangeMiddleware;
+  return middleware;
 };
 
 export default createStateChangeMiddleware;

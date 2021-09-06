@@ -1,95 +1,105 @@
 import {
   createStateChangeMiddleware,
   StateChangeMiddleware,
-  StateChangeMiddlewareError
-} from '../../src/state/StateChangeMiddleware'
-import { createStore, applyMiddleware, Store, AnyAction } from 'redux'
+  StateChangeMiddlewareError,
+} from "../../src/state/StateChangeMiddleware";
+import { createStore, applyMiddleware, Store, AnyAction } from "redux";
 
-describe('index', () => {
-  const reducer = jest.fn((state: any, action: any) => {
-    switch (action.type) {
-      case 'changeState':
-        return {
-          ...state,
-          ...action.payload
-        }
-    }
-    return state
-  })
-
-  let stateChangeMiddleware: StateChangeMiddleware
-  let store: Store
-  let changeState: <T>(value: T) => AnyAction
-  let initialState: any
+describe("index", () => {
+  let reducer: any;
+  let stateChangeMiddleware: StateChangeMiddleware;
+  let store: Store;
+  let changeState: <T>(value: T) => AnyAction;
+  let initialState: any;
 
   beforeEach(() => {
-    initialState = { value: 1 }
-    stateChangeMiddleware = createStateChangeMiddleware()
+    initialState = { value: 1 };
+    stateChangeMiddleware = createStateChangeMiddleware();
+    reducer = jest.fn((state: any, action: any) => {
+      switch (action.type) {
+        case "changeState":
+          return {
+            ...state,
+            ...action.payload,
+          };
+      }
+      return state;
+    });
     store = createStore(
       reducer,
       initialState,
       applyMiddleware(stateChangeMiddleware)
-    )
-    expect(store.getState()).toEqual(initialState)
-    changeState = value => ({ type: 'changeState', payload: { value } })
-  })
+    );
+    expect(store.getState()).toEqual(initialState);
+    changeState = (value) => ({ type: "changeState", payload: { value } });
+  });
 
-  it('Dispatch action when state changes', () => {
+  it("Dispatch action when state changes", () => {
     stateChangeMiddleware
       .whenStateChanges((state: any) => state?.value)
-      .thenDispatch({ type: 'stateChanged' })
+      .thenDispatch({ type: "stateChanged" });
 
-    store.dispatch(changeState(2))
+    store.dispatch(changeState(2));
 
-    expect(reducer).toHaveBeenCalledWith(initialState, changeState(2))
-    expect(reducer).toHaveBeenCalledWith({ value: 2 }, { type: 'stateChanged' })
-  })
+    expect(reducer).toHaveBeenCalledWith(initialState, changeState(2));
+    expect(reducer).toHaveBeenCalledWith(
+      { value: 2 },
+      { type: "stateChanged" }
+    );
+  });
 
-  it('Dispatch action when state changes with action creator', () => {
+  it("Dispatch action when state changes with action creator", () => {
     const actionCreator = (selectedState: any) => {
       return {
-        type: 'stateChanged',
-        payload: 'CHANGED:' + selectedState
-      }
-    }
+        type: "stateChanged",
+        payload: "CHANGED:" + selectedState,
+      };
+    };
     stateChangeMiddleware
       .whenStateChanges((state: any) => state?.value)
-      .thenDispatch(actionCreator)
+      .thenDispatch(actionCreator);
 
-    store.dispatch(changeState(2))
+    store.dispatch(changeState(2));
 
-    expect(reducer).toHaveBeenCalledWith(initialState, changeState(2))
-    expect(reducer).toHaveBeenCalledWith({ value: 2 }, { type: 'stateChanged' })
-  })
-  it('Change state when no change listene is registered', () => {
-    store.dispatch(changeState(2))
+    expect(reducer).toHaveBeenCalledWith(initialState, changeState(2));
+    expect(reducer).toHaveBeenCalledWith(
+      { value: 2 },
+      { type: "stateChanged", payload: "CHANGED:2" }
+    );
+  });
+
+  it("Change state when no change listene is registered", () => {
+    store.dispatch(changeState(2));
     expect(reducer).not.toHaveBeenLastCalledWith(
       { value: 2 },
-      { type: 'stateChanged' }
-    )
-  })
+      { type: "stateChanged" }
+    );
+  });
 
-  it('Change another part of the state than the change listener is registered to', () => {
+  it("Change another part of the state than the change listener is registered to", () => {
     stateChangeMiddleware
       .whenStateChanges((state: any) => state?.value)
-      .thenDispatch({ type: 'stateChanged' })
+      .thenDispatch({ type: "stateChanged" });
 
-    store.dispatch({ type: 'changeState', payload: { otherValue: 2 } })
+    store.dispatch({ type: "changeState", payload: { otherValue: 2 } });
 
-    expect(store.getState()).toEqual({ value: 1, otherValue: 2 })
+    expect(store.getState()).toEqual({ value: 1, otherValue: 2 });
     expect(reducer).not.toHaveBeenCalledWith(
       { value: 1, otherValue: 2 },
-      { type: 'stateChanged' }
-    )
-  })
+      { type: "stateChanged" }
+    );
+  });
 
-  it('Limit endless loops', async () => {
+  it("Limit endless loops", async () => {
+    expect(reducer).toBeCalledTimes(1);
+
     stateChangeMiddleware
       .whenStateChanges((state: any) => state?.value)
-      .thenDispatch(value => changeState(value + 1))
+      .thenDispatch((value) => changeState(value + 1));
 
     expect(() => store.dispatch(changeState(2))).toThrow(
       StateChangeMiddlewareError
-    )
-  }, 500)
-})
+    );
+    expect(reducer).toBeCalledTimes(21);
+  }, 50);
+});
