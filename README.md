@@ -1,3 +1,5 @@
+[![pipeline status](https://gitlab.link-intersystems.com/open-source/js/redux/redux-middlewares/badges/master/pipeline.svg)](https://gitlab.link-intersystems.com/open-source/js/redux/redux-middlewares/-/commits/master) [![coverage report](https://gitlab.link-intersystems.com/open-source/js/redux/redux-middlewares/badges/master/coverage.svg)](https://gitlab.link-intersystems.com/open-source/js/redux/redux-middlewares/-/commits/master)
+
 # Redux Middlewares Library
 
 A collection of middlewares for Redux.
