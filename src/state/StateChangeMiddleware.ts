@@ -184,8 +184,16 @@ const defaultOptions = {
   onCallStackLimitExceeded,
 };
 
+type StateChangeMiddlewareOptions = {
+  maxCallStackDepth: number;
+  onCallStackLimitExceeded: (
+    maxCallStackDepth: number,
+    callStackDepth: number
+  ) => void;
+};
+
 export const createStateChangeMiddleware = (
-  options = defaultOptions
+  options: StateChangeMiddlewareOptions = defaultOptions
 ): StateChangeMiddleware => {
   const effectiveOptions = { ...defaultOptions, ...options };
 

@@ -6,30 +6,34 @@ import {
 import { createStore, applyMiddleware, Store, AnyAction } from "redux";
 
 describe("index", () => {
-  let reducer: any;
+  const reducer = (state: any, action: any) => {
+    switch (action.type) {
+      case "changeState":
+        return {
+          ...state,
+          ...action.payload,
+        };
+    }
+    return state;
+  };
+
+  const initialState = { value: 1 };
+
+  let reducerMock: any;
   let stateChangeMiddleware: StateChangeMiddleware;
   let store: Store;
   let changeState: <T>(value: T) => AnyAction;
-  let initialState: any;
 
   beforeEach(() => {
-    initialState = { value: 1 };
+    reducerMock = jest.fn(reducer);
+
     stateChangeMiddleware = createStateChangeMiddleware();
-    reducer = jest.fn((state: any, action: any) => {
-      switch (action.type) {
-        case "changeState":
-          return {
-            ...state,
-            ...action.payload,
-          };
-      }
-      return state;
-    });
     store = createStore(
-      reducer,
+      reducerMock,
       initialState,
       applyMiddleware(stateChangeMiddleware)
     );
+
     expect(store.getState()).toEqual(initialState);
     changeState = (value) => ({ type: "changeState", payload: { value } });
   });
@@ -41,8 +45,8 @@ describe("index", () => {
 
     store.dispatch(changeState(2));
 
-    expect(reducer).toHaveBeenCalledWith(initialState, changeState(2));
-    expect(reducer).toHaveBeenCalledWith(
+    expect(reducerMock).toHaveBeenCalledWith(initialState, changeState(2));
+    expect(reducerMock).toHaveBeenCalledWith(
       { value: 2 },
       { type: "stateChanged" }
     );
@@ -61,8 +65,8 @@ describe("index", () => {
 
     store.dispatch(changeState(2));
 
-    expect(reducer).toHaveBeenCalledWith(initialState, changeState(2));
-    expect(reducer).toHaveBeenCalledWith(
+    expect(reducerMock).toHaveBeenCalledWith(initialState, changeState(2));
+    expect(reducerMock).toHaveBeenCalledWith(
       { value: 2 },
       { type: "stateChanged", payload: "CHANGED:2" }
     );
@@ -70,7 +74,7 @@ describe("index", () => {
 
   it("Change state when no change listene is registered", () => {
     store.dispatch(changeState(2));
-    expect(reducer).not.toHaveBeenLastCalledWith(
+    expect(reducerMock).not.toHaveBeenLastCalledWith(
       { value: 2 },
       { type: "stateChanged" }
     );
@@ -84,14 +88,14 @@ describe("index", () => {
     store.dispatch({ type: "changeState", payload: { otherValue: 2 } });
 
     expect(store.getState()).toEqual({ value: 1, otherValue: 2 });
-    expect(reducer).not.toHaveBeenCalledWith(
+    expect(reducerMock).not.toHaveBeenCalledWith(
       { value: 1, otherValue: 2 },
       { type: "stateChanged" }
     );
   });
 
   it("Limit endless loops", async () => {
-    expect(reducer).toBeCalledTimes(1);
+    expect(reducerMock).toBeCalledTimes(1);
 
     stateChangeMiddleware
       .whenStateChanges((state: any) => state?.value)
@@ -100,6 +104,28 @@ describe("index", () => {
     expect(() => store.dispatch(changeState(2))).toThrow(
       StateChangeMiddlewareError
     );
-    expect(reducer).toBeCalledTimes(21);
+    expect(reducerMock).toBeCalledTimes(21);
+  }, 50);
+  it("Limit endless loops - no error thrown", async () => {
+    reducerMock = jest.fn(reducer);
+    stateChangeMiddleware = createStateChangeMiddleware({
+      maxCallStackDepth: 2,
+      onCallStackLimitExceeded: () => {},
+    });
+    store = createStore(
+      reducerMock,
+      initialState,
+      applyMiddleware(stateChangeMiddleware)
+    );
+
+    expect(reducerMock).toBeCalledTimes(1);
+
+    stateChangeMiddleware
+      .whenStateChanges((state: any) => state?.value)
+      .thenDispatch((value) => changeState(value + 1));
+
+    store.dispatch(changeState(2));
+
+    expect(reducerMock).toBeCalledTimes(3);
   }, 50);
 });
