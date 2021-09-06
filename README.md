@@ -1,4 +1,5 @@
-[![pipeline status](https://gitlab.link-intersystems.com/open-source/js/redux/redux-middlewares/badges/master/pipeline.svg)](https://gitlab.link-intersystems.com/open-source/js/redux/redux-middlewares/-/commits/master) [![coverage report](https://gitlab.link-intersystems.com/open-source/js/redux/redux-middlewares/badges/master/coverage.svg)](https://gitlab.link-intersystems.com/open-source/js/redux/redux-middlewares/-/commits/master)
+![GitHub Workflow Status](https://img.shields.io/github/workflow/status/link-intersystems/redux-middlewares/Node.js%20CI)
+![Coverage Status](https://coveralls.io/repos/github/link-intersystems/redux-middlewares/badge.svg?branch=master)
 
 # Redux Middlewares Library
 
