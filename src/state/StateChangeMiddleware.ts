@@ -2,9 +2,14 @@ import { AnyAction, Dispatch, Middleware, MiddlewareAPI } from "redux";
 
 export type StateSelector<S, T> = (state: S) => T;
 
+export type ActionFactoryArgs<S, T> = {
+  selectedState: T;
+  state: S;
+  triggerAction: AnyAction;
+};
+
 export type ActionFactory<S, T> = (
-  selectedState: T,
-  state?: S
+  args: ActionFactoryArgs<S, T>
 ) => AnyAction | undefined;
 
 export type ActionRef<S, T> = AnyAction | ActionFactory<S, T>;
@@ -38,9 +43,9 @@ class StateDependency<S, T> implements OnStateChange<S, T> {
     return this.stateSelector(state);
   }
 
-  createAction(state: S, target: T) {
+  createAction(state: S, target: T, triggerAction: AnyAction) {
     if (typeof this.actionRef === "function") {
-      return this.actionRef(target, state);
+      return this.actionRef({ selectedState: target, state, triggerAction });
     }
     return this.actionRef;
   }
@@ -87,10 +92,14 @@ class StateChangeTrigger {
     this.stateBefore = stateBefore;
   }
 
-  getAction(state: any): AnyAction | undefined {
+  getDispatchAction(state: any, triggerAction: AnyAction): AnyAction | undefined {
     const stateAfter = this.stateDependency.selectState(state);
     if (this.stateBefore !== stateAfter) {
-      return this.stateDependency.createAction(state, stateAfter);
+      return this.stateDependency.createAction(
+        state,
+        stateAfter,
+        triggerAction
+      );
     }
   }
 }
@@ -161,7 +170,7 @@ const stateChangeMiddleware = (listenerRegistry: StateListenerRegistry) => {
     const stateAfter = store.getState();
 
     const dispatchActions = changeTriggers
-      .map((sct) => sct.getAction(stateAfter))
+      .map((sct) => sct.getDispatchAction(stateAfter, action))
       .filter(undefinedElements);
 
     dispatchActions.forEach(store.dispatch);

@@ -1,131 +1,148 @@
 import {
+  ActionFactory,
   createStateChangeMiddleware,
   StateChangeMiddleware,
   StateChangeMiddlewareError,
+  StateSelector,
 } from "../../src/state/StateChangeMiddleware";
-import { createStore, applyMiddleware, Store, AnyAction } from "redux";
+import { createStore, applyMiddleware, Store } from "redux";
 
 describe("StateChangeMiddleware tests", () => {
-  const reducer = (state: any, action: any) => {
-    switch (action.type) {
-      case "changeState":
-        return {
-          ...state,
-          ...action.payload,
-        };
+  function counter(state: any, action: any) {
+    const result = { ...state };
+    const { type, payload } = action;
+
+    switch (type) {
+      case "inc":
+        result.counter = result.counter + payload;
+        break;
+      case "dec":
+        result.counter = result.counter + payload;
+        break;
+      case "text":
+        result.text = "Counter " + payload;
+        break;
     }
-    return state;
-  };
 
-  const initialState = { value: 1 };
+    return result;
+  }
 
-  let reducerMock: any;
+  const counterSelector: StateSelector<any, number> = (state: any) =>
+    state.counter;
+  const inc = (value: number) => ({ type: "inc", payload: value });
+  const dec = (value: number) => ({ type: "dec", payload: value });
+  const text = (value: any) => ({ type: "text", payload: value });
+
+  const initialState = { counter: 0, text: "" };
+
+  let counterMock: any;
   let stateChangeMiddleware: StateChangeMiddleware;
   let store: Store;
-  let changeState: <T>(value: T) => AnyAction;
 
   beforeEach(() => {
-    reducerMock = jest.fn(reducer);
+    counterMock = jest.fn(counter);
 
     stateChangeMiddleware = createStateChangeMiddleware();
     store = createStore(
-      reducerMock,
+      counterMock,
       initialState,
       applyMiddleware(stateChangeMiddleware)
     );
 
     expect(store.getState()).toEqual(initialState);
-    changeState = (value) => ({ type: "changeState", payload: { value } });
   });
 
   it("Dispatch action when state changes", () => {
     stateChangeMiddleware
-      .whenStateChanges((state: any) => state?.value)
-      .thenDispatch({ type: "stateChanged" });
+      .whenStateChanges(counterSelector)
+      .thenDispatch({ type: "text", payload: "changed" });
 
-    store.dispatch(changeState(2));
+    store.dispatch(inc(2));
 
-    expect(reducerMock).toHaveBeenCalledWith(initialState, changeState(2));
-    expect(reducerMock).toHaveBeenCalledWith(
-      { value: 2 },
-      { type: "stateChanged" }
+    expect(counterMock).toHaveBeenCalledWith(initialState, inc(2));
+    expect(counterMock).toHaveBeenCalledWith(
+      { counter: 2, text: "" },
+      { type: "text", payload: "changed" }
     );
+
+    expect(store.getState()).toEqual({ counter: 2, text: "Counter changed" });
   });
 
   it("Dispatch action when state changes with action creator", () => {
-    const actionCreator = (selectedState: any) => {
-      return {
-        type: "stateChanged",
-        payload: "CHANGED:" + selectedState,
-      };
-    };
+    const actionCreator: ActionFactory<any, number> = ({
+      triggerAction,
+      selectedState,
+    }) => ({
+      type: "text",
+      payload: triggerAction.type + " " + selectedState,
+    });
+
     stateChangeMiddleware
-      .whenStateChanges((state: any) => state?.value)
+      .whenStateChanges(counterSelector)
       .thenDispatch(actionCreator);
 
-    store.dispatch(changeState(2));
+    store.dispatch(inc(2));
 
-    expect(reducerMock).toHaveBeenCalledWith(initialState, changeState(2));
-    expect(reducerMock).toHaveBeenCalledWith(
-      { value: 2 },
-      { type: "stateChanged", payload: "CHANGED:2" }
+    expect(counterMock).toHaveBeenCalledTimes(3);
+    expect(counterMock).toHaveBeenCalledWith(initialState, inc(2));
+    expect(counterMock).toHaveBeenCalledWith(
+      { counter: 2, text: "" },
+      { type: "text", payload: "inc 2" }
     );
   });
 
   it("Change state when no change listene is registered", () => {
-    store.dispatch(changeState(2));
-    expect(reducerMock).not.toHaveBeenLastCalledWith(
-      { value: 2 },
-      { type: "stateChanged" }
-    );
+    store.dispatch(inc(2));
+
+    expect(counterMock).toHaveBeenCalledTimes(2);
+    expect(counterMock).toHaveBeenCalledWith(initialState, inc(2));
   });
 
   it("Change another part of the state than the change listener is registered to", () => {
     stateChangeMiddleware
-      .whenStateChanges((state: any) => state?.value)
+      .whenStateChanges((state: any) => state.value)
       .thenDispatch({ type: "stateChanged" });
 
-    store.dispatch({ type: "changeState", payload: { otherValue: 2 } });
+    store.dispatch(text("TEST"));
 
-    expect(store.getState()).toEqual({ value: 1, otherValue: 2 });
-    expect(reducerMock).not.toHaveBeenCalledWith(
-      { value: 1, otherValue: 2 },
+    expect(counterMock).toHaveBeenCalledTimes(2);
+    expect(store.getState()).toEqual({ counter: 0, text: "Counter TEST" });
+    expect(counterMock).not.toHaveBeenCalledWith(
+      { counter: 0, text: "Counter TEST" },
       { type: "stateChanged" }
     );
   });
 
   it("Limit endless loops", async () => {
-    expect(reducerMock).toBeCalledTimes(1);
+    expect(counterMock).toBeCalledTimes(1);
 
     stateChangeMiddleware
-      .whenStateChanges((state: any) => state?.value)
-      .thenDispatch((value) => changeState(value + 1));
+      .whenStateChanges(counterSelector)
+      .thenDispatch(({ selectedState }) => dec(selectedState));
 
-    expect(() => store.dispatch(changeState(2))).toThrow(
-      StateChangeMiddlewareError
-    );
-    expect(reducerMock).toBeCalledTimes(21);
+    expect(() => store.dispatch(inc(2))).toThrow(StateChangeMiddlewareError);
+    expect(counterMock).toBeCalledTimes(21);
   }, 50);
   it("Limit endless loops - no error thrown", async () => {
-    reducerMock = jest.fn(reducer);
+    counterMock = jest.fn(counter);
     stateChangeMiddleware = createStateChangeMiddleware({
       maxCallStackDepth: 2,
       onCallStackLimitExceeded: () => {},
     });
     store = createStore(
-      reducerMock,
+      counterMock,
       initialState,
       applyMiddleware(stateChangeMiddleware)
     );
 
-    expect(reducerMock).toBeCalledTimes(1);
+    expect(counterMock).toBeCalledTimes(1);
 
     stateChangeMiddleware
-      .whenStateChanges((state: any) => state?.value)
-      .thenDispatch((value) => changeState(value + 1));
+      .whenStateChanges(counterSelector)
+      .thenDispatch(({ selectedState }) => dec(selectedState));
 
-    store.dispatch(changeState(2));
+    store.dispatch(inc(2));
 
-    expect(reducerMock).toBeCalledTimes(3);
+    expect(counterMock).toBeCalledTimes(3);
   }, 50);
 });
