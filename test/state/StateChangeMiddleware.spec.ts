@@ -182,4 +182,35 @@ describe("StateChangeMiddleware tests", () => {
       expect(counterMock).toHaveBeenCalledTimes(11); // 1 inc(2) + 10 state changes
     }
   }, 50);
+
+  it("State change limit exceeded -> actionStack passed", () => {
+    counterMock = jest.fn(counter);
+    const onCallStackLimitExceeded = jest.fn();
+    stateChangeMiddleware = createStateChangeMiddleware({
+      maxCallStackDepth: 1,
+      onCallStackLimitExceeded,
+    });
+
+    store = createStore(
+      counterMock,
+      initialState,
+      applyMiddleware(stateChangeMiddleware)
+    );
+    counterMock.mockClear();
+
+    stateChangeMiddleware
+      .whenStateChanges(counterSelector)
+      .thenDispatch(({ selectedState }) => dec(selectedState));
+
+    try {
+      store.dispatch(inc(2));
+      throw new Error("State change call stack limit should be exceeded");
+    } catch (e: any) {
+      expect(onCallStackLimitExceeded).toHaveBeenCalledTimes(1);
+      expect(onCallStackLimitExceeded).toHaveBeenCalledWith(
+        [inc(2), dec(2)],
+        1
+      );
+    }
+  });
 });

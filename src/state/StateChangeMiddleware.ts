@@ -92,7 +92,10 @@ class StateChangeTrigger {
     this.stateBefore = stateBefore;
   }
 
-  getDispatchAction(state: any, triggerAction: AnyAction): AnyAction | undefined {
+  getDispatchAction(
+    state: any,
+    triggerAction: AnyAction
+  ): AnyAction | undefined {
     const stateAfter = this.stateDependency.selectState(state);
     if (this.stateBefore !== stateAfter) {
       return this.stateDependency.createAction(
@@ -126,25 +129,27 @@ function callStackTemplate(
     next: Dispatch<AnyAction>,
     action: AnyAction
   ) => any,
-  onCallStackLimitExceeded: (
-    maxCallStackDepth: number,
-    callStackDepth: number
-  ) => void
+  onCallStackLimitExceeded: OnCallStackLimitExceeded
 ): StateChangeMiddleware {
-  let callStackDepth = 0;
+  let actions: AnyAction[] = [];
 
   const template =
     (api: MiddlewareAPI<Dispatch<AnyAction>, any>) =>
     (next: Dispatch<AnyAction>) =>
     (action: AnyAction) => {
-      try {
-        if (callStackDepth++ <= maxCallStackDepth) {
+      if (actions.length <= maxCallStackDepth) {
+        try {
+          actions.push(action);
           return fn(api, next, action);
-        } else {
-          onCallStackLimitExceeded(maxCallStackDepth, callStackDepth);
+        } finally {
+          actions.pop();
         }
-      } finally {
-        callStackDepth--;
+      } else {
+        try {
+          onCallStackLimitExceeded([...actions], maxCallStackDepth);
+        } finally {
+          actions = [];
+        }
       }
     };
 
@@ -178,26 +183,28 @@ const stateChangeMiddleware = (listenerRegistry: StateListenerRegistry) => {
   };
 };
 
-const onCallStackLimitExceeded = (
-  maxCallStackDepth: number,
-  callStackDepth: number
+const defaultOnCallStackLimitExceeded = (
+  actionStack: AnyAction[],
+  maxCallStackDepth: number
 ) => {
   throw new StateChangeMiddlewareError(
-    `Max call stack depth ${maxCallStackDepth} exceeded: ${callStackDepth}`
+    `Max call stack depth ${maxCallStackDepth} exceeded: ${actionStack}`
   );
 };
 
 const defaultOptions = {
   maxCallStackDepth: 20,
-  onCallStackLimitExceeded,
+  onCallStackLimitExceeded: defaultOnCallStackLimitExceeded,
 };
 
-type StateChangeMiddlewareOptions = {
+export type OnCallStackLimitExceeded = (
+  actionStack: AnyAction[],
+  maxCallStackDepth: number
+) => void;
+
+export type StateChangeMiddlewareOptions = {
   maxCallStackDepth: number;
-  onCallStackLimitExceeded?: (
-    maxCallStackDepth: number,
-    callStackDepth: number
-  ) => void;
+  onCallStackLimitExceeded?: OnCallStackLimitExceeded;
 };
 
 export const createStateChangeMiddleware = (

@@ -32,9 +32,18 @@ Let's assume you have a counter reducer
 
 and you want the text to be updated whenever the couner value is modified. You can then use the state change middleware.
 
-First you need to configure your store to use the state change middleware.
+### Install the dependency
 
+    npm i @link-intersystems/redux-middlewares
+
+### Configure the store
+    import { createStateChangeMiddleware } from '@link-intersystems/redux-middlewares'
+    import { createStore, applyMiddleware } from 'redux'
+
+    
     const stateChangeMiddleware = createStateChangeMiddleware();
+
+    const initialState = { counter: 0, text: "" };
 
     store = createStore(
       counter,
@@ -42,17 +51,18 @@ First you need to configure your store to use the state change middleware.
       applyMiddleware(stateChangeMiddleware)
     );
 
-Then you can specify the state listeners.
+
+### Specify state change actions
 
     stateChangeMiddleware
       .whenStateChanges((state) => state.counter)
       .thenDispatch({ type: "text", payload: "changed" });
 
-So whenever the state you selected by `whenStateChanges` the action you define will be dispatched.
+This configuration means that whenever the state you selected by `whenStateChanges` the action you define in `thenDispatch` is dispatched.
 
 ### Dynamically create dispatch actions
 
-You can also pass a action factory function to the `thenDispatch`. An `ActionFactory` is simply a function that will be invoked with an `ActionFactoryArgs` and returns `AnyAction`.
+You can also pass an `ActionFactory` function to `thenDispatch`. An `ActionFactory` is simply a function that will be invoked with  `ActionFactoryArgs` and returns `AnyAction`.
 
     export type ActionFactory<S, T> = (
       args: ActionFactoryArgs<S, T>
@@ -64,7 +74,7 @@ You can also pass a action factory function to the `thenDispatch`. An `ActionFac
       triggerAction: AnyAction;
     };
 
-Using an `ActionFactory` you can dynamically create actions based on the changed state.
+With an `ActionFactory` you can dynamically create actions based on the changed state and/or the trigger action (the action that triggered the state change).
 
     stateChangeMiddleware
       .whenStateChanges((state) => state.counter)
@@ -74,4 +84,20 @@ Using an `ActionFactory` you can dynamically create actions based on the changed
         })
       );
 
-In this scenario the `ActionFactory` will be invoked every time the `state.counter` changes and the created action will be dispatched.
+In this scenario the `ActionFactory` will be invoked every time the `state.counter` changes and creates an action with the payload `triggerAction.type + " " + selectedState` which will then be dispatched.
+
+### Infinit loop prevention
+
+When you specify state change behavior you can introduce infinit loops. E.g
+
+    stateChangeMiddleware
+      .whenStateChanges((state) => state.a)
+      .thenDispatch(changeStateB())
+      );
+
+    stateChangeMiddleware
+      .whenStateChanges((state) => state.b)
+      .thenDispatch(changeStateA())
+      );
+
+The state change middleware detects those loops by tracking the call stack depth. Per default a call stack depth of 20 state change dispatches is allowed. If you
