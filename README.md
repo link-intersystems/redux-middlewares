@@ -2,8 +2,10 @@
 
 ![GitHub Workflow Status](https://img.shields.io/github/workflow/status/link-intersystems/redux-middlewares/Node.js%20CI)
 ![Coverage Status](https://coveralls.io/repos/github/link-intersystems/redux-middlewares/badge.svg?branch=master)
+![GitHub issues](https://img.shields.io/github/issues-raw/link-intersystems/redux-middlewares)
+[![GitHub license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.md)
 
-A collection of middlewares for Redux. [MIT License](LICENSE.md)
+A collection of middlewares for Redux. 
 
 ## State Change Middleware
 
