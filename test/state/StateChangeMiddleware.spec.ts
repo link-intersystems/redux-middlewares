@@ -50,6 +50,7 @@ describe("StateChangeMiddleware tests", () => {
     );
 
     expect(store.getState()).toEqual(initialState);
+    counterMock.mockClear();
   });
 
   it("Dispatch action when state changes", () => {
@@ -83,7 +84,7 @@ describe("StateChangeMiddleware tests", () => {
 
     store.dispatch(inc(2));
 
-    expect(counterMock).toHaveBeenCalledTimes(3);
+    expect(counterMock).toHaveBeenCalledTimes(2);
     expect(counterMock).toHaveBeenCalledWith(initialState, inc(2));
     expect(counterMock).toHaveBeenCalledWith(
       { counter: 2, text: "" },
@@ -94,7 +95,7 @@ describe("StateChangeMiddleware tests", () => {
   it("Change state when no change listene is registered", () => {
     store.dispatch(inc(2));
 
-    expect(counterMock).toHaveBeenCalledTimes(2);
+    expect(counterMock).toHaveBeenCalledTimes(1);
     expect(counterMock).toHaveBeenCalledWith(initialState, inc(2));
   });
 
@@ -105,7 +106,7 @@ describe("StateChangeMiddleware tests", () => {
 
     store.dispatch(text("TEST"));
 
-    expect(counterMock).toHaveBeenCalledTimes(2);
+    expect(counterMock).toHaveBeenCalledTimes(1);
     expect(store.getState()).toEqual({ counter: 0, text: "Counter TEST" });
     expect(counterMock).not.toHaveBeenCalledWith(
       { counter: 0, text: "Counter TEST" },
@@ -114,7 +115,20 @@ describe("StateChangeMiddleware tests", () => {
   });
 
   it("Limit endless loops", async () => {
-    expect(counterMock).toBeCalledTimes(1);
+    expect(counterMock).toBeCalledTimes(0);
+
+    stateChangeMiddleware
+      .whenStateChanges(counterSelector)
+      .thenDispatch(({ selectedState }) => dec(selectedState));
+
+    expect(() => store.dispatch(inc(2))).toThrowError(
+      StateChangeMiddlewareError
+    );
+    expect(counterMock).toBeCalledTimes(21);
+  }, 50);
+
+  it("Limit endless loops", async () => {
+    expect(counterMock).toBeCalledTimes(0);
 
     stateChangeMiddleware
       .whenStateChanges(counterSelector)
@@ -123,10 +137,11 @@ describe("StateChangeMiddleware tests", () => {
     expect(() => store.dispatch(inc(2))).toThrow(StateChangeMiddlewareError);
     expect(counterMock).toBeCalledTimes(21);
   }, 50);
+
   it("Limit endless loops - no error thrown", async () => {
     counterMock = jest.fn(counter);
     stateChangeMiddleware = createStateChangeMiddleware({
-      maxCallStackDepth: 2,
+      maxCallStackDepth: 1,
       onCallStackLimitExceeded: () => {},
     });
     store = createStore(
@@ -134,8 +149,7 @@ describe("StateChangeMiddleware tests", () => {
       initialState,
       applyMiddleware(stateChangeMiddleware)
     );
-
-    expect(counterMock).toBeCalledTimes(1);
+    counterMock.mockClear();
 
     stateChangeMiddleware
       .whenStateChanges(counterSelector)
@@ -143,6 +157,29 @@ describe("StateChangeMiddleware tests", () => {
 
     store.dispatch(inc(2));
 
-    expect(counterMock).toBeCalledTimes(3);
+    expect(counterMock).toBeCalledTimes(2);
+  }, 50);
+
+  it("Limit endless loops - state change dispatches count", () => {
+    counterMock = jest.fn(counter);
+    stateChangeMiddleware = createStateChangeMiddleware({
+      maxCallStackDepth: 10,
+    });
+    store = createStore(
+      counterMock,
+      initialState,
+      applyMiddleware(stateChangeMiddleware)
+    );
+    counterMock.mockClear();
+
+    stateChangeMiddleware
+      .whenStateChanges(counterSelector)
+      .thenDispatch(({ selectedState }) => dec(selectedState));
+    try {
+      store.dispatch(inc(2));
+      throw new Error("State change call stack limit should be exceeded");
+    } catch (e: any) {
+      expect(counterMock).toHaveBeenCalledTimes(11); // 1 inc(2) + 10 state changes
+    }
   }, 50);
 });

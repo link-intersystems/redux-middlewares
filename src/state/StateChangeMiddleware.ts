@@ -137,12 +137,11 @@ function callStackTemplate(
     (api: MiddlewareAPI<Dispatch<AnyAction>, any>) =>
     (next: Dispatch<AnyAction>) =>
     (action: AnyAction) => {
-      callStackDepth++;
       try {
-        if (callStackDepth > maxCallStackDepth) {
-          onCallStackLimitExceeded(maxCallStackDepth, callStackDepth);
-        } else {
+        if (callStackDepth++ <= maxCallStackDepth) {
           return fn(api, next, action);
+        } else {
+          onCallStackLimitExceeded(maxCallStackDepth, callStackDepth);
         }
       } finally {
         callStackDepth--;
@@ -195,7 +194,7 @@ const defaultOptions = {
 
 type StateChangeMiddlewareOptions = {
   maxCallStackDepth: number;
-  onCallStackLimitExceeded: (
+  onCallStackLimitExceeded?: (
     maxCallStackDepth: number,
     callStackDepth: number
   ) => void;
