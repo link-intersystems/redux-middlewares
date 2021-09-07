@@ -100,4 +100,27 @@ When you specify state change behavior you can introduce infinit loops. E.g
       .thenDispatch(changeStateA())
       );
 
-The state change middleware detects those loops by tracking the call stack depth. Per default a call stack depth of 20 state change dispatches is allowed. If you
+The state change middleware detects those loops by tracking the call stack depth. Per default a call stack depth of 20 state change dispatches is allowed. If you want to change this you can pass a config to the `createStateChangeMiddleware`.
+
+    stateChangeMiddleware = createStateChangeMiddleware({
+      maxCallStackDepth: 1
+    });
+
+If you want to handle the call stack limit exceeded, you can also provide a handle function.
+    
+    stateChangeMiddleware = createStateChangeMiddleware({
+      maxCallStackDepth: 1,
+      onCallStackLimitExceeded: (actionStack, maxCallStackDepth) => {},
+    });
+
+Here are the options you can pass to the `createStateChangeMiddleware`.
+
+    export type OnCallStackLimitExceeded = (
+      actionStack: AnyAction[],
+      maxCallStackDepth: number
+    ) => void;
+
+    export type StateChangeMiddlewareOptions = {
+      maxCallStackDepth: number;
+      onCallStackLimitExceeded?: OnCallStackLimitExceeded;
+    };
