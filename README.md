@@ -3,7 +3,7 @@
 
 # Redux Middlewares Library
 
-A collection of middlewares for Redux.
+A collection of middlewares for Redux. [MIT License](LICENSE.md)
 
 ## State Change Middleware
 
