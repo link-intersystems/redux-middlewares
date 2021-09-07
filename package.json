@@ -3,7 +3,7 @@
   "version": "1.0.1",
   "description": "Library of redux middlewares",
   "license": "MIT",
-  "keywords": [],
+  "keywords": ["redux", "middleware", "state", "observer", "listener"],
   "authors": [
     "René Link <rene.link@link-intersystems.com> (https://stackoverflow.com/users/974186/ren%c3%a9-link?tab=profile)"
   ],
