@@ -1,9 +1,15 @@
 {
   "name": "@link-intersystems/redux-middlewares",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Library of redux middlewares",
   "license": "MIT",
-  "keywords": ["redux", "middleware", "state", "observer", "listener"],
+  "keywords": [
+    "redux",
+    "middleware",
+    "state",
+    "observer",
+    "listener"
+  ],
   "authors": [
     "René Link <rene.link@link-intersystems.com> (https://stackoverflow.com/users/974186/ren%c3%a9-link?tab=profile)"
   ],
