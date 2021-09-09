@@ -5,7 +5,32 @@ import {
   StateChangeMiddlewareError,
   StateSelector,
 } from "../../src/state/StateChangeMiddleware";
-import { createStore, applyMiddleware, Store } from "redux";
+import {
+  createStore as reduxCreateStore,
+  applyMiddleware,
+  Store,
+  AnyAction,
+  Reducer,
+} from "redux";
+import thunkMiddleware, { ThunkAction, ThunkDispatch } from "redux-thunk";
+
+type ThunkStore<S = any, A extends AnyAction = AnyAction> = Store<S, A> & {
+  dispatchThunk: ThunkDispatch<S, unknown, A>;
+};
+
+const createStore = (
+  reducer: Reducer<any, AnyAction>,
+  initialState: any,
+  stateChangeMiddleware: StateChangeMiddleware
+): ThunkStore => {
+  const store = reduxCreateStore(
+    reducer,
+    initialState,
+    applyMiddleware(stateChangeMiddleware, thunkMiddleware)
+  ) as ThunkStore;
+  store.dispatchThunk = store.dispatch;
+  return store;
+};
 
 describe("StateChangeMiddleware tests", () => {
   function counter(state: any, action: any) {
@@ -37,17 +62,13 @@ describe("StateChangeMiddleware tests", () => {
 
   let counterMock: any;
   let stateChangeMiddleware: StateChangeMiddleware;
-  let store: Store;
+  let store: ThunkStore;
 
   beforeEach(() => {
     counterMock = jest.fn(counter);
 
     stateChangeMiddleware = createStateChangeMiddleware();
-    store = createStore(
-      counterMock,
-      initialState,
-      applyMiddleware(stateChangeMiddleware)
-    );
+    store = createStore(counterMock, initialState, stateChangeMiddleware);
 
     expect(store.getState()).toEqual(initialState);
     counterMock.mockClear();
@@ -144,11 +165,7 @@ describe("StateChangeMiddleware tests", () => {
       maxCallStackDepth: 1,
       onCallStackLimitExceeded: () => {},
     });
-    store = createStore(
-      counterMock,
-      initialState,
-      applyMiddleware(stateChangeMiddleware)
-    );
+    store = createStore(counterMock, initialState, stateChangeMiddleware);
     counterMock.mockClear();
 
     stateChangeMiddleware
@@ -165,11 +182,7 @@ describe("StateChangeMiddleware tests", () => {
     stateChangeMiddleware = createStateChangeMiddleware({
       maxCallStackDepth: 10,
     });
-    store = createStore(
-      counterMock,
-      initialState,
-      applyMiddleware(stateChangeMiddleware)
-    );
+    store = createStore(counterMock, initialState, stateChangeMiddleware);
     counterMock.mockClear();
 
     stateChangeMiddleware
@@ -178,7 +191,7 @@ describe("StateChangeMiddleware tests", () => {
     try {
       store.dispatch(inc(2));
       throw new Error("State change call stack limit should be exceeded");
-    } catch (e: any) {
+    } catch (ignoreError: any) {
       expect(counterMock).toHaveBeenCalledTimes(11); // 1 inc(2) + 10 state changes
     }
   }, 50);
@@ -191,11 +204,7 @@ describe("StateChangeMiddleware tests", () => {
       onCallStackLimitExceeded,
     });
 
-    store = createStore(
-      counterMock,
-      initialState,
-      applyMiddleware(stateChangeMiddleware)
-    );
+    store = createStore(counterMock, initialState, stateChangeMiddleware);
     counterMock.mockClear();
 
     stateChangeMiddleware
@@ -205,12 +214,62 @@ describe("StateChangeMiddleware tests", () => {
     try {
       store.dispatch(inc(2));
       throw new Error("State change call stack limit should be exceeded");
-    } catch (e: any) {
+    } catch (ignoreError: any) {
       expect(onCallStackLimitExceeded).toHaveBeenCalledTimes(1);
       expect(onCallStackLimitExceeded).toHaveBeenCalledWith(
         [inc(2), dec(2)],
         1
       );
     }
+  });
+
+  it("Dispatch action when thunk changes state", () => {
+    function doubleInc(value: number) {
+      const incValue = value + value;
+      return (dispatch: any) => {
+        dispatch(inc(incValue));
+      };
+    }
+
+    stateChangeMiddleware
+      .whenStateChanges(counterSelector)
+      .thenDispatch({ type: "text", payload: "changed" });
+
+    store.dispatch(doubleInc(2) as any as AnyAction);
+
+    expect(counterMock).toHaveBeenCalledWith(initialState, inc(4));
+    expect(counterMock).toHaveBeenCalledWith(
+      { counter: 4, text: "" },
+      { type: "text", payload: "changed" }
+    );
+
+    expect(store.getState()).toEqual({ counter: 4, text: "Counter changed" });
+  });
+
+  it("Dispatch action when async thunk changes state", async () => {
+    const delayedInc =
+      (value: number): ThunkAction<Promise<void>, any, unknown, AnyAction> =>
+      async (dispatch) => {
+        return new Promise(function (resolve) {
+          setTimeout(() => {
+            dispatch(inc(value));
+            resolve();
+          }, 5);
+        });
+      };
+
+    stateChangeMiddleware
+      .whenStateChanges(counterSelector)
+      .thenDispatch({ type: "text", payload: "changed" });
+
+    await store.dispatchThunk(delayedInc(2));
+
+    expect(counterMock).toHaveBeenCalledWith(initialState, inc(2));
+    expect(counterMock).toHaveBeenCalledWith(
+      { counter: 2, text: "" },
+      { type: "text", payload: "changed" }
+    );
+
+    expect(store.getState()).toEqual({ counter: 2, text: "Counter changed" });
   });
 });
