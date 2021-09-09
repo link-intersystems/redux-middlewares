@@ -34,15 +34,19 @@ Let's assume you have a counter reducer
 
 and you want the text to be updated whenever the couner value is modified. You can then use the state change middleware.
 
+See the Pen [Example of Redux StateChangeMiddleware by Link Intersystems](https://codepen.io/rene-link/pen/YzQZNYJ) by René Link ([@rene-link](https://codepen.io/rene-link))
+on [CodePen](https://codepen.io).
+
 ## Install the dependency
 
     npm i @link-intersystems/redux-middlewares
 
 ## Configure the store
+
     import { createStateChangeMiddleware } from '@link-intersystems/redux-middlewares'
     import { createStore, applyMiddleware } from 'redux'
 
-    
+
     const stateChangeMiddleware = createStateChangeMiddleware();
 
     const initialState = { counter: 0, text: "" };
@@ -52,7 +56,6 @@ and you want the text to be updated whenever the couner value is modified. You c
       initialState,
       applyMiddleware(stateChangeMiddleware)
     );
-
 
 ## Specify state change actions
 
@@ -64,7 +67,7 @@ This configuration means that whenever the state you selected by `whenStateChang
 
 ## Dynamically create dispatch actions
 
-You can also pass an `ActionFactory` function to `thenDispatch`. An `ActionFactory` is simply a function that will be invoked with  `ActionFactoryArgs` and returns `AnyAction`.
+You can also pass an `ActionFactory` function to `thenDispatch`. An `ActionFactory` is simply a function that will be invoked with `ActionFactoryArgs` and returns `AnyAction`.
 
     export type ActionFactory<S, T> = (
       args: ActionFactoryArgs<S, T>
@@ -109,7 +112,7 @@ The state change middleware detects those loops by tracking the call stack depth
     });
 
 If you want to handle the call stack limit exceeded, you can also provide a handle function.
-    
+
     stateChangeMiddleware = createStateChangeMiddleware({
       maxCallStackDepth: 1,
       onCallStackLimitExceeded: (actionStack, maxCallStackDepth) => {},
